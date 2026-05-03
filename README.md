@@ -17,5 +17,4 @@ This project implements a facial beauty prediction system using MediaPipe Face M
 
 ## How to Run
 pip install -r requirements.txt
-python main.py# facial-beauty-prediction
-Facial Beauty Prediction using MediaPipe and Linear Regression
+python main.py

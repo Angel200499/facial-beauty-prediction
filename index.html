@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Beauty AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;500;700&display=swap" rel="stylesheet">
+
+<style>
+body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #fbc2eb, #a6c1ee);
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.card {
+    backdrop-filter: blur(15px);
+    background: rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 25px;
+    width: 360px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+/* BUTTON */
+button {
+    margin: 6px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #ff758c, #ff7eb3);
+    color: white;
+    transition: 0.2s;
+}
+
+button:hover {
+    transform: scale(1.05);
+}
+
+/* MEDIA */
+.media-box {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 10px;
+}
+
+video, img {
+    width: 220px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+video {
+    display: none;
+}
+
+/* INPUT */
+input[type="file"] {
+    display: block;
+    margin: 8px auto;
+}
+
+/* RESULT */
+.result-box {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.6);
+}
+
+.score {
+    font-size: 22px;
+    font-weight: bold;
+    color: #ff4d6d;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+    <h2>✨ Beauty AI</h2>
+    <p>Select input method</p>
+
+    <button onclick="useUpload()">📁 Upload</button>
+    <button onclick="useCamera()">📸 Camera</button>
+
+    <!-- Upload -->
+    <div id="uploadBox">
+        <input type="file" id="imageInput" onchange="previewImage()">
+    </div>
+
+    <!-- Camera -->
+    <div id="cameraBox" style="display:none;">
+        <div class="media-box">
+            <video id="video" autoplay playsinline></video>
+        </div>
+        <button onclick="capture()">Capture / Retake</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="media-box">
+        <img id="preview" style="display:none;">
+    </div>
+
+    <button onclick="predict()">Analyze</button>
+
+    <div class="result-box" id="result">
+        Results will appear here ✨
+    </div>
+</div>
+
+<script>
+
+let capturedBlob = null;
+let stream = null;
+
+// RESET UI
+function resetUI() {
+    const preview = document.getElementById("preview");
+
+    preview.src = "";
+    preview.style.display = "none";
+
+    document.getElementById("result").innerHTML = "Results will appear here ✨";
+
+    capturedBlob = null;
+
+    document.getElementById("imageInput").value = "";
+}
+
+// UPLOAD MODE
+function useUpload() {
+    stopCamera();
+    resetUI();
+
+    document.getElementById("uploadBox").style.display = "block";
+    document.getElementById("cameraBox").style.display = "none";
+}
+
+// CAMERA MODE
+function useCamera() {
+    resetUI();
+
+    document.getElementById("uploadBox").style.display = "none";
+    document.getElementById("cameraBox").style.display = "block";
+
+    startCamera();
+}
+
+// START CAMERA
+function startCamera() {
+    navigator.mediaDevices.getUserMedia({ video: true })
+    .then(s => {
+        stream = s;
+
+        const video = document.getElementById("video");
+        video.srcObject = stream;
+        video.style.display = "block";
+
+        video.onloadedmetadata = () => video.play();
+    })
+    .catch(() => alert("Camera access denied"));
+}
+
+// STOP CAMERA
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+
+    document.getElementById("video").style.display = "none";
+}
+
+// PREVIEW UPLOAD
+function previewImage() {
+    const file = document.getElementById('imageInput').files[0];
+    const preview = document.getElementById('preview');
+
+    if (!file) return;
+
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+
+    capturedBlob = null;
+}
+
+// CAPTURE / RETAKE
+function capture() {
+
+    // 🔥 RETAKE
+    if (capturedBlob) {
+        capturedBlob = null;
+        document.getElementById("preview").style.display = "none";
+        startCamera();
+        document.getElementById("result").innerHTML = "Camera ready...";
+        return;
+    }
+
+    const video = document.getElementById("video");
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob(blob => {
+        capturedBlob = blob;
+
+        const preview = document.getElementById("preview");
+        preview.src = URL.createObjectURL(blob);
+        preview.style.display = "block";
+
+        stopCamera();
+
+        document.getElementById("result").innerHTML = "📸 Image ready!";
+    }, "image/jpeg", 0.9);
+}
+
+// PREDICT
+function predict() {
+    let formData = new FormData();
+    const fileInput = document.getElementById("imageInput");
+
+    if (capturedBlob) {
+        formData.append("image", capturedBlob, "capture.jpg");
+    } else if (fileInput.files[0]) {
+        formData.append("image", fileInput.files[0]);
+    } else {
+        alert("Please select or capture an image!");
+        return;
+    }
+
+    document.getElementById("result").innerHTML = "⏳ Processing...";
+
+    fetch("http://127.0.0.1:5000/predict", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        if (data.error) {
+            document.getElementById("result").innerHTML = "❌ " + data.error;
+            return;
+        }
+
+        document.getElementById("result").innerHTML = `
+            <div class="score">⭐ ${data.beauty_score_ml}</div>
+            <div>Rule Score: ${data.beauty_score_rule}</div>
+            <div>Symmetry: ${data.symmetry}</div>
+            <div>Proportion: ${data.proportion}</div>
+            <b>${data.kategori}</b>
+        `;
+    })
+    .catch(() => {
+        document.getElementById("result").innerHTML = "❌ Server connection error";
+    });
+}
+
+</script>
+
+</body>
+</html>
